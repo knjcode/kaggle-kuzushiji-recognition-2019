@@ -76,6 +76,7 @@ class DatasetCatalog(object):
             "train_ids": "input/test_images.list",
             "data_csv": "input/train.csv",
             "unicode_translation": "input/unicode_translation_only_train.csv",
+            "ext_type": "png",
             "mode": 'test',
         },
         "voc_2007_train": {

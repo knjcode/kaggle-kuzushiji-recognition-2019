@@ -27,8 +27,11 @@ class KuzushijiDataset(torch.utils.data.Dataset):
         self.mode = mode
         self.transforms = transforms
         self.df_ut = pd.read_csv(unicode_translation)
-        with open('input/full_image_size_dict.pickle', 'rb') as f:
-            self.image_size_dict = pickle.load(f)
+        try:
+            with open('input/full_image_size_dict.pickle', 'rb') as f:
+                self.image_size_dict = pickle.load(f)
+        except FileNotFoundError:
+            self.image_size_dict = {}
         self.labels_dict, self.boxes_dict = self._preprocess_id_and_bbox(self.data_csv)
 
     def _preprocess_id_and_bbox(self, data_csv):
@@ -74,10 +77,11 @@ class KuzushijiDataset(torch.utils.data.Dataset):
             target = self.get_groundtruth(idx)
             target = target.clip_to_image(remove_empty=True)
         else:
+            # generate dummy labels
             image_id = self.ids[idx]
             width, height = self.image_size_dict[image_id]
-            target = BoxList([[0,0,4,4]], (width, height), mode="xyxy")
-            target.add_field("labels", torch.tensor([1]))
+            target = BoxList([[0,0,0,0]], (width, height), mode="xyxy")
+            target.add_field("labels", torch.tensor([0]))
             target.add_field("difficult", torch.tensor([0]))
 
         if self.transforms is not None:
@@ -93,9 +97,13 @@ class KuzushijiDataset(torch.utils.data.Dataset):
         image_id = self.ids[idx]
 
         width, height = self.image_size_dict[image_id]
-        boxes = self.boxes_dict[image_id]
+        try:
+            boxes = self.boxes_dict[image_id]
+            labels = torch.tensor(self.labels_dict[image_id])
+        except KeyError:
+            boxes = [[0, 0, 0, 0]]
+            labels = torch.tensor([0])
         target = BoxList(boxes, (width, height), mode="xyxy")
-        labels = torch.tensor(self.labels_dict[image_id])
         difficults = torch.tensor([0]*len(labels))
         target.add_field("labels", labels)
         target.add_field("difficult", difficults)
@@ -106,7 +114,7 @@ class KuzushijiDataset(torch.utils.data.Dataset):
         try:
             width, height = self.image_size_dict[image_id]
         except KeyError:
-            filename = image_id + '.jpg'
+            filename = image_id + '.png'
             image = Image.open(self.data_dir + '/' + filename).convert("RGB")
             self.image_size_dict[image_id] = image.size
             width, height = image.size
